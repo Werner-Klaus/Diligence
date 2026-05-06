@@ -51,6 +51,20 @@ def parse_port_list(value: str) -> list[int | str]:
     return ports
 
 
+def default_report_path(command: str, filename: str) -> Path:
+    """Erzeuge einen Reportpfad im passenden Unterordner."""
+    path = APP_DIR / "reports" / command / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def selected_report_path(output: str | None, command: str, filename: str) -> Path:
+    """Nutze --output oder den Default-Unterordner fuer ein Kommando."""
+    path = Path(output) if output else default_report_path(command, filename)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def cmd_verify_tools(args: argparse.Namespace) -> int:
     """Verifiziere verfuegbare Tools."""
     logger = setup_logging()
@@ -95,11 +109,10 @@ def cmd_ping(args: argparse.Namespace) -> int:
     print(f"  Erreichbar: {len(reachable)}")
     print(f"  Nicht erreichbar: {len(unreachable)}")
     
-    # Report speichern
-    if args.output:
-        report_path = Path(args.output)
-        create_ping_report(results, report_path)
-        logger.info(f"Ping-Report gespeichert: {report_path}")
+    stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = selected_report_path(args.output, "ping", f"ping_{stamp}.md")
+    create_ping_report(results, report_path)
+    logger.info(f"Ping-Report gespeichert: {report_path}")
     
     return 0
 
@@ -131,14 +144,13 @@ def cmd_compare(args: argparse.Namespace) -> int:
     print(f"  Entfernte Hosts: {len(differences['gone_hosts'])}")
     print(f"  Geaenderte Hosts: {len(differences['changed_hosts'])}")
     
-    # Reports speichern
-    if args.output:
-        report_path = Path(args.output)
-        create_comparison_report(old_path, new_path, report_path, logger)
-        
-        json_path = report_path.with_name(report_path.stem + ".json")
-        export_comparison_json(differences, json_path)
-        logger.info(f"Vergleichs-Reports gespeichert")
+    stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = selected_report_path(args.output, "compare", f"compare_{stamp}.md")
+    create_comparison_report(old_path, new_path, report_path, logger)
+
+    json_path = report_path.with_name(report_path.stem + ".json")
+    export_comparison_json(differences, json_path)
+    logger.info(f"Vergleichs-Reports gespeichert: {report_path}, {json_path}")
     
     return 0
 
@@ -168,11 +180,10 @@ def cmd_probe(args: argparse.Namespace) -> int:
             banner_info = f" ({banner[:40]})" if banner else ""
             print(f"    {port}/{banner_info}")
     
-    # Report speichern
-    if args.output:
-        report_path = Path(args.output)
-        create_port_probe_report(args.host, results, report_path)
-        logger.info(f"Port-Probe-Report gespeichert: {report_path}")
+    stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = selected_report_path(args.output, "probe", f"probe_{safe_name(args.host)}_{stamp}.md")
+    create_port_probe_report(args.host, results, report_path)
+    logger.info(f"Port-Probe-Report gespeichert: {report_path}")
     
     return 0
 
@@ -193,6 +204,22 @@ def cmd_listen(args: argparse.Namespace) -> int:
     print(f"\nVerbindungen erfasst: {len(connections)}")
     for i, conn in enumerate(connections[:10], 1):
         print(f"  {i}. {conn[:80]}")
+
+    stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = selected_report_path(args.output, "listen", f"listen_{args.port}_{stamp}.md")
+    content = [
+        "# Ncat Listen Report",
+        "",
+        f"- Port: {args.port}",
+        f"- Dauer: {args.duration} Sekunden",
+        f"- Verbindungen: {len(connections)}",
+        "",
+        "## Daten",
+        "",
+    ]
+    content.extend([f"{index}. `{conn[:160]}`" for index, conn in enumerate(connections, 1)] or ["Keine Verbindungen erfasst."])
+    report_path.write_text("\n".join(content) + "\n", encoding="utf-8")
+    logger.info(f"Listen-Report gespeichert: {report_path}")
     
     return 0
 
@@ -238,10 +265,14 @@ def cmd_scripts(args: argparse.Namespace) -> int:
         for script_name in list(script_results.keys())[:5]:
             print(f"  - {script_name}")
 
-        if args.output:
-            report_path = Path(args.output)
-            create_script_analysis_report(args.host, args.profile, results, report_path)
-            logger.info(f"Script-Report gespeichert: {report_path}")
+        stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_path = selected_report_path(
+            args.output,
+            "scripts",
+            f"scripts_{args.profile}_{safe_name(args.host)}_{stamp}.md",
+        )
+        create_script_analysis_report(args.host, args.profile, results, report_path)
+        logger.info(f"Script-Report gespeichert: {report_path}")
 
         return 0
     except Exception as exc:
@@ -296,8 +327,8 @@ def cmd_smb(args: argparse.Namespace) -> int:
                 print(f"    - {share}")
 
         stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = Path(args.output) if args.output else APP_DIR / "reports" / f"smb_{safe_name(args.host)}_{stamp}.md"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        suffix = ".json" if args.output and Path(args.output).suffix.lower() == ".json" else ".md"
+        output_path = selected_report_path(args.output, "smb", f"smb_{safe_name(args.host)}_{stamp}{suffix}")
         if output_path.suffix.lower() == ".json":
             output_path.write_text(json.dumps(smb_data, indent=2, ensure_ascii=False), encoding="utf-8")
         else:
@@ -391,8 +422,8 @@ def cmd_smb_sweep(args: argparse.Namespace) -> int:
             ))
 
         stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = Path(args.output) if args.output else APP_DIR / "reports" / f"smb_sweep_{safe_name(args.target)}_{stamp}.md"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        suffix = ".json" if args.output and Path(args.output).suffix.lower() == ".json" else ".md"
+        output_path = selected_report_path(args.output, "smb_sweep", f"smb_sweep_{safe_name(args.target)}_{stamp}{suffix}")
         if output_path.suffix.lower() == ".json":
             output_path.write_text(json.dumps({"target": args.target, "hosts": hosts, "analyses": analyses}, indent=2, ensure_ascii=False), encoding="utf-8")
         else:
@@ -434,10 +465,10 @@ def cmd_ssl(args: argparse.Namespace) -> int:
                 if line.strip():
                     print(f"  {line[:80]}")
         
-        if args.output:
-            output_path = Path(args.output)
-            output_path.write_text(ssl_data.get('output', ''), encoding="utf-8")
-            logger.info(f"SSL-Report gespeichert: {output_path}")
+        stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = selected_report_path(args.output, "ssl", f"ssl_{safe_name(args.host)}_{port}_{stamp}.txt")
+        output_path.write_text(ssl_data.get('output', ''), encoding="utf-8")
+        logger.info(f"SSL-Report gespeichert: {output_path}")
         
         return 0
     except Exception as exc:
@@ -497,6 +528,7 @@ Beispiele:
     listen_parser = subparsers.add_parser("listen", help="Ncat - Auf Port abhoeren")
     listen_parser.add_argument("--port", type=int, required=True, help="Port zum Abhoeren")
     listen_parser.add_argument("--duration", type=int, default=30, help="Abhoer-Dauer in Sekunden")
+    listen_parser.add_argument("--output", help="Pfad fuer Listen-Report")
     listen_parser.add_argument("--log-level", default="INFO", help="Log-Level")
     
     # scripts

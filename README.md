@@ -18,8 +18,11 @@ python validate.py
 python diligence.py
 ```
 
-Die Reports landen im Ordner `reports/`. Die kompakte Markdown-Datei
-`*_summary.md` ist fuer die schnelle Sichtung im Editor oder auf GitHub gedacht.
+Die Reports landen unter `reports/` in getrennten Unterordnern. Der normale
+Netzwerkscan schreibt nach `reports/diligence/`; Suite-Kommandos wie `ping`,
+`probe`, `scripts`, `smb`, `smb_sweep`, `ssl` und `listen` schreiben jeweils in
+ihren eigenen Ordner. Die kompakte Markdown-Datei `*_summary.md` ist fuer die
+schnelle Sichtung im Editor oder auf GitHub gedacht.
 
 ## Dependencies fuer Tests automatisch installieren
 
@@ -85,7 +88,7 @@ python diligence.py --target 192.168.178.0/24 --profile ports
 python diligence.py --target 192.168.178.0/24 --ports 22,53,80,139,443,445,515,631,9100,5000,5357,49152-49156
 python diligence.py --target 192.168.178.0/24 --profile common --timeout 900
 python diligence.py --target 192.168.178.0/24 --profile common --stats-every 5
-python diligence.py --parse-only .\reports\diligence_20260506_120000.xml
+python diligence.py --parse-only .\reports\diligence\diligence_20260506_120000.xml
 ```
 
 Oeffentliche Zielbereiche sind absichtlich blockiert, solange

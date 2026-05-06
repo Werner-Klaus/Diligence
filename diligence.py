@@ -569,7 +569,7 @@ def main() -> int:
     target = config["scan"]["target"]
     require_authorized_target(target, bool(config["scan"].get("allow_public_targets", False)))
 
-    report_dir = resolve_app_path(config["paths"]["report_dir"])
+    report_dir = resolve_app_path(config["paths"]["report_dir"]) / "diligence"
     report_dir.mkdir(parents=True, exist_ok=True)
     stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     xml_path = Path(args.parse_only) if args.parse_only else report_dir / f"diligence_{stamp}.xml"
