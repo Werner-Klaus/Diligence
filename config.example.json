@@ -4,7 +4,8 @@
     "profile": "common",
     "allow_public_targets": false,
     "timing": "T3",
-    "top_ports": 100
+    "top_ports": 100,
+    "timeout_seconds": 1800
   },
   "paths": {
     "report_dir": "reports",

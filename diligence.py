@@ -15,6 +15,7 @@ import logging
 import shutil
 import subprocess
 import sys
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -159,16 +160,36 @@ def build_nmap_command(config: dict[str, Any], xml_path: Path) -> list[str]:
     return command
 
 
-def run_nmap(command: list[str], nmap_exe: str, logger: logging.Logger) -> None:
+def stop_process(process: subprocess.Popen) -> None:
+    if process.poll() is not None:
+        return
+
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+
+
+def run_nmap(command: list[str], nmap_exe: str, timeout_seconds: int, logger: logging.Logger) -> None:
     command[0] = nmap_exe
     logger.info("Starte Nmap: %s", " ".join(command))
-    result = subprocess.run(command, cwd=APP_DIR, text=True, capture_output=True, check=False)
-    if result.stdout:
-        logger.info(result.stdout.strip())
-    if result.stderr:
-        logger.warning(result.stderr.strip())
-    if result.returncode != 0:
-        raise RuntimeError(f"Nmap fehlgeschlagen (Exit Code {result.returncode})")
+    started_at = time.monotonic()
+    process = subprocess.Popen(command, cwd=APP_DIR)
+
+    try:
+        while process.poll() is None:
+            if timeout_seconds > 0 and time.monotonic() - started_at > timeout_seconds:
+                stop_process(process)
+                raise RuntimeError(f"Nmap-Timeout nach {timeout_seconds} Sekunden")
+            time.sleep(0.5)
+    except KeyboardInterrupt as exc:
+        stop_process(process)
+        raise RuntimeError("Nmap-Scan durch Benutzer abgebrochen") from exc
+
+    if process.returncode != 0:
+        raise RuntimeError(f"Nmap fehlgeschlagen (Exit Code {process.returncode})")
 
 
 def parse_nmap_xml(xml_path: Path) -> list[dict[str, str]]:
@@ -310,6 +331,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--profile", choices=sorted(PROFILE_COMMANDS), help="Scan-Profil")
     parser.add_argument("--allow-public", action="store_true", help="Oeffentliche Ziele erlauben, wenn autorisiert")
     parser.add_argument("--install-deps", action="store_true", help="Fehlendes Nmap fuer Tests per Bootstrap installieren")
+    parser.add_argument("--timeout", type=int, help="Nmap-Timeout in Sekunden, 0 deaktiviert")
     parser.add_argument("--parse-only", help="Vorhandene Nmap-XML parsen, ohne neuen Scan")
     return parser.parse_args()
 
@@ -324,6 +346,8 @@ def main() -> int:
         config["scan"]["profile"] = args.profile
     if args.allow_public:
         config["scan"]["allow_public_targets"] = True
+    if args.timeout is not None:
+        config["scan"]["timeout_seconds"] = args.timeout
 
     logger = setup_logging(config)
     target = config["scan"]["target"]
@@ -336,8 +360,9 @@ def main() -> int:
 
     if not args.parse_only:
         nmap_exe = ensure_nmap(args.install_deps)
+        timeout_seconds = int(config["scan"].get("timeout_seconds", 1800))
         command = build_nmap_command(config, xml_path)
-        run_nmap(command, nmap_exe, logger)
+        run_nmap(command, nmap_exe, timeout_seconds, logger)
 
     rows = parse_nmap_xml(xml_path)
     reports = create_reports(config, rows, report_dir, stamp)
