@@ -16,9 +16,26 @@ from nmap_suite import find_nmap_tool
 
 # Vordefinierte Script-Profile fÃ¼r hÃ¤ufige Anwendungen
 SCRIPT_PROFILES = {
+    "home-services": {
+        "description": "Sichere NSE-Analyse typischer Heimnetz-Dienste",
+        "ports": [22, 53, 80, 139, 443, 445, 515, 631, 9100, 5000, 5357, "49152-49156"],
+        "scripts": [
+            "ssh-hostkey",
+            "ssh-auth-methods",
+            "http-title",
+            "http-server-header",
+            "http-headers",
+            "ssl-cert",
+            "ssl-enum-ciphers",
+            "smb-protocols",
+            "smb-os-discovery",
+            "smb-security-mode",
+            "dns-nsid",
+        ],
+    },
     "smb-basic": {
         "description": "SMB Basis-Analyse (Protokolle, OS, Security Mode)",
-        "ports": [445],
+        "ports": [139, 445],
         "scripts": [
             "smb-protocols",
             "smb-os-discovery",
@@ -245,7 +262,7 @@ class NmapScriptRunner:
         self,
         host: str,
         scripts: list[str],
-        ports: list[int],
+        ports: list[int | str],
         timeout_seconds: int = 300,
         skip_host_discovery: bool = False,
     ) -> dict[str, Any]:
@@ -359,7 +376,7 @@ class NmapScriptRunner:
     def smb_analysis(
         self,
         host: str,
-        port: int = 445,
+        ports: Optional[list[int | str]] = None,
         scripts: Optional[list[str]] = None,
         timeout_seconds: int = 180,
         skip_host_discovery: bool = False,
@@ -372,14 +389,15 @@ class NmapScriptRunner:
         """
         self.logger.info(f"Starte SMB-Analyse fuer {host}")
         selected_scripts = scripts or SCRIPT_PROFILES["smb-basic"]["scripts"]
+        selected_ports = ports or SCRIPT_PROFILES["smb-basic"]["ports"]
         results = self.run_custom_scripts(
             host,
             selected_scripts,
-            [port],
+            selected_ports,
             timeout_seconds=timeout_seconds,
             skip_host_discovery=skip_host_discovery,
         )
-        return summarize_smb_results(host, port, selected_scripts, results)
+        return summarize_smb_results(host, selected_ports, selected_scripts, results)
 
     def ssl_analysis(self, host: str, port: int = 443) -> dict[str, Any]:
         """
@@ -499,7 +517,7 @@ def create_script_analysis_report(
 
 def summarize_smb_results(
     host: str,
-    port: int,
+    ports: list[int | str],
     scripts: list[str],
     script_results: dict[str, Any],
 ) -> dict[str, Any]:
@@ -515,7 +533,7 @@ def summarize_smb_results(
 
     summary = {
         "host": host,
-        "port": port,
+        "ports": [str(port) for port in ports],
         "scripts": scripts,
         "protocols": [],
         "os": "-",
@@ -556,7 +574,7 @@ def create_smb_report(smb_data: dict[str, Any], output_path: Path) -> None:
         "# SMB Analyse",
         "",
         f"- Host: {smb_data.get('host', '-')}",
-        f"- Port: {smb_data.get('port', '-')}",
+        f"- Ports: {', '.join(smb_data.get('ports', []))}",
         f"- OS: {smb_data.get('os', '-')}",
         f"- Computer Name: {smb_data.get('computer_name', '-')}",
         f"- Domain/Workgroup: {smb_data.get('domain', '-')}",

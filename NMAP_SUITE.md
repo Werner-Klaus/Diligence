@@ -235,17 +235,24 @@ python validate.py --install
 # SMB-Protokolle, OS-Discovery und Security Mode auf Port 445
 python diligence_suite.py smb --host 192.168.178.20
 
+# SMB auf mehreren typischen Ports
+python diligence_suite.py smb --host 192.168.178.20 --ports 139,445
+
 # Entspricht in etwa:
-# nmap --script smb-protocols,smb-os-discovery,smb-security-mode -p 445 192.168.178.20
+# nmap --script smb-protocols,smb-os-discovery,smb-security-mode -p 139,445 192.168.178.20
 
 # Tiefere SMB-Inventarisierung mit Shares/Users
 python diligence_suite.py smb --host 192.168.178.20 --deep --output reports/smb_deep_192.168.178.20.md
 
 # Explizites Script-Profil
 python diligence_suite.py scripts --host 192.168.178.20 --profile smb-basic --output reports/smb_basic.md
+
+# Breites Heimnetz-Service-Profil
+python diligence_suite.py scripts --host 192.168.178.20 --profile home-services --output reports/home_services.md
 ```
 
 Profile:
+- `home-services`: sichere Checks fuer SSH, DNS, HTTP(S), SMB, Drucker/IoT-Ports
 - `smb-basic`: `smb-protocols`, `smb-os-discovery`, `smb-security-mode`
 - `smb`: `smb-basic` plus `smb-enum-shares`, `smb-enum-users`
 - `smb-vuln`: getrennte SMB-Schwachstellenchecks

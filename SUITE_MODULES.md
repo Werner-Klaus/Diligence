@@ -281,7 +281,9 @@ for i in range(len(xml_files)-1):
 
 ```powershell
 python diligence_suite.py smb --host 192.168.178.20
+python diligence_suite.py smb --host 192.168.178.20 --ports 139,445
 python diligence_suite.py smb --host 192.168.178.20 --deep
+python diligence_suite.py scripts --host 192.168.178.20 --profile home-services
 python diligence_suite.py scripts --host 192.168.178.20 --profile smb-basic
 python diligence_suite.py scripts --host 192.168.178.20 --profile smb-vuln
 ```

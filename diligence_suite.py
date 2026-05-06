@@ -40,6 +40,17 @@ def safe_name(value: str) -> str:
     return value.replace("\\", "_").replace("/", "_").replace(":", "_").replace(" ", "_")
 
 
+def parse_port_list(value: str) -> list[int | str]:
+    """Komma-Portliste parsen; Ranges wie 49152-49156 bleiben erhalten."""
+    ports: list[int | str] = []
+    for item in value.split(","):
+        part = item.strip()
+        if not part:
+            continue
+        ports.append(part if "-" in part else int(part))
+    return ports
+
+
 def cmd_verify_tools(args: argparse.Namespace) -> int:
     """Verifiziere verfÃ¼gbare Tools."""
     logger = setup_logging()
@@ -200,7 +211,7 @@ def cmd_scripts(args: argparse.Namespace) -> int:
         return 1
 
     profile_config = SCRIPT_PROFILES[args.profile]
-    ports = [int(p.strip()) for p in args.ports.split(",")] if args.ports else profile_config.get("ports", [])
+    ports = parse_port_list(args.ports) if args.ports else profile_config.get("ports", [])
     print(f"\nStarte {args.profile} Script-Profil...")
     print(f"Beschreibung: {profile_config['description']}")
     print(f"Scripts: {len(profile_config['scripts'])}")
@@ -246,7 +257,8 @@ def cmd_smb(args: argparse.Namespace) -> int:
         print("Fehler: --host erforderlich", file=sys.stderr)
         return 1
 
-    print(f"\nStarte SMB-Analyse fuer {args.host}:{args.port}...")
+    ports = parse_port_list(args.ports)
+    print(f"\nStarte SMB-Analyse fuer {args.host}:{','.join(str(port) for port in ports)}...")
 
     runner = NmapScriptRunner(logger)
     if not runner.is_available():
@@ -258,14 +270,14 @@ def cmd_smb(args: argparse.Namespace) -> int:
         scripts = [s.strip() for s in args.scripts.split(",")] if args.scripts else profile["scripts"]
         smb_data = runner.smb_analysis(
             args.host,
-            port=args.port,
+            ports=ports,
             scripts=scripts,
             timeout_seconds=args.timeout,
             skip_host_discovery=args.skip_host_discovery,
         )
 
         print(f"\nSMB-Analyse Ergebnisse:")
-        print(f"  Port: {smb_data.get('port', '-')}")
+        print(f"  Ports: {', '.join(smb_data.get('ports', []))}")
         print(f"  OS: {smb_data.get('os', '-')}")
         print(f"  Computer: {smb_data.get('computer_name', '-')}")
         print(f"  Domain: {smb_data.get('domain', '-')}")
@@ -350,6 +362,7 @@ Beispiele:
   python diligence_suite.py compare --old scan1.xml --new scan2.xml
   python diligence_suite.py probe --host 192.168.1.1 --ports 22,80,443
   python diligence_suite.py listen --port 5000 --duration 30
+  python diligence_suite.py scripts --host 192.168.178.20 --profile home-services
   python diligence_suite.py scripts --host 192.168.178.20 --profile smb-basic
   python diligence_suite.py smb --host 192.168.178.20
   python diligence_suite.py smb --host 192.168.178.20 --deep
@@ -394,7 +407,7 @@ Beispiele:
     scripts_parser = subparsers.add_parser("scripts", help="Nmap Scripts - Service-Analyse")
     scripts_parser.add_argument("--host", required=True, help="Ziel-Host")
     scripts_parser.add_argument("--profile", required=True, choices=sorted(SCRIPT_PROFILES.keys()), help="Script-Profil")
-    scripts_parser.add_argument("--ports", help="Komma-separierte Portliste, ueberschreibt Profil-Ports")
+    scripts_parser.add_argument("--ports", help="Komma-separierte Portliste, Ranges erlaubt, ueberschreibt Profil-Ports")
     scripts_parser.add_argument("--timeout", type=int, default=300, help="Timeout in Sekunden")
     scripts_parser.add_argument("--skip-host-discovery", action="store_true", help="Nmap -Pn setzen")
     scripts_parser.add_argument("--output", help="Pfad fÃ¼r Script-Report")
@@ -403,7 +416,7 @@ Beispiele:
     # smb
     smb_parser = subparsers.add_parser("smb", help="SMB/Windows Analyse")
     smb_parser.add_argument("--host", required=True, help="Ziel-Host")
-    smb_parser.add_argument("--port", type=int, default=445, help="SMB-Port (default: 445)")
+    smb_parser.add_argument("--ports", default="139,445", help="Komma-separierte SMB-Portliste (default: 139,445)")
     smb_parser.add_argument("--deep", action="store_true", help="Zusaetzlich Shares/Users abfragen")
     smb_parser.add_argument("--scripts", help="Komma-separierte NSE-Scripts, ueberschreibt basic/deep")
     smb_parser.add_argument("--timeout", type=int, default=180, help="Timeout in Sekunden")

@@ -252,6 +252,12 @@ Wenn alles ✓: **Gratulieren! Du bist bereit!**
 # Protokolle und Betriebssystem-Infos auf Port 445
 python diligence_suite.py smb --host 192.168.178.20
 
+# SMB auf NetBIOS/SMB direkt pruefen
+python diligence_suite.py smb --host 192.168.178.20 --ports 139,445
+
 # Zusaetzlich Shares/Users abfragen
 python diligence_suite.py smb --host 192.168.178.20 --deep --output reports/smb_deep_192.168.178.20.md
+
+# Mehrere wichtige Heimnetz-Services mit sicheren NSE-Scripts
+python diligence_suite.py scripts --host 192.168.178.20 --profile home-services --output reports/home_services.md
 ```
