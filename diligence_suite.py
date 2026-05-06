@@ -172,7 +172,7 @@ def cmd_probe(args: argparse.Namespace) -> int:
     
     connected = [p for p, r in results.items() if r["connected"]]
     print(f"\nErgebnisse:")
-    print(f"  Erreichbare Ports: {len(connected)}")
+    print(f"  Offene Ports: {len(connected)}")
     
     for port in sorted(results.keys()):
         if results[port]["connected"]:
