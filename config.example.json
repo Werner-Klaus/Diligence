@@ -11,6 +11,23 @@
     "timeout_seconds": 1800,
     "stats_every_seconds": 10
   },
+  "nping": {
+    "enabled": true,
+    "auto_ping_discovered_hosts": false,
+    "ping_count": 3,
+    "timeout_ms": 5000
+  },
+  "ndiff": {
+    "enabled": true,
+    "auto_compare_with_last": false,
+    "keep_comparison_reports": true
+  },
+  "ncat": {
+    "enabled": true,
+    "port_probe_timeout": 5,
+    "banner_grab_enabled": true,
+    "probe_discovered_ports": false
+  },
   "paths": {
     "report_dir": "reports",
     "log_file": "Diligence.log",
