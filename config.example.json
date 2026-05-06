@@ -5,7 +5,8 @@
     "allow_public_targets": false,
     "timing": "T3",
     "top_ports": 100,
-    "timeout_seconds": 1800
+    "timeout_seconds": 1800,
+    "stats_every_seconds": 10
   },
   "paths": {
     "report_dir": "reports",

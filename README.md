@@ -51,7 +51,8 @@ damit der aktualisierte PATH sichtbar ist.
     "allow_public_targets": false,
     "timing": "T3",
     "top_ports": 100,
-    "timeout_seconds": 1800
+    "timeout_seconds": 1800,
+    "stats_every_seconds": 10
   }
 }
 ```
@@ -68,6 +69,7 @@ Profile:
 python diligence.py --target 192.168.178.0/24 --profile discovery
 python diligence.py --target 192.168.178.0/24 --profile common
 python diligence.py --target 192.168.178.0/24 --profile common --timeout 900
+python diligence.py --target 192.168.178.0/24 --profile common --stats-every 5
 python diligence.py --parse-only .\reports\diligence_20260506_120000.xml
 ```
 
@@ -75,4 +77,6 @@ Oeffentliche Zielbereiche sind absichtlich blockiert, solange
 `allow_public_targets` nicht bewusst aktiviert wird.
 
 Hinweis: `common` nutzt Service-Erkennung (`-sV`) und kann auf einem ganzen `/24`
-mehrere Minuten laufen. Fuer schnelle Funktionstests ist `discovery` sinnvoller.
+mehrere Minuten laufen. Diligence zeigt waehrenddessen regelmaessig Fortschritt
+und die bisherige Laufzeit an. Fuer schnelle Funktionstests ist `discovery`
+sinnvoller.

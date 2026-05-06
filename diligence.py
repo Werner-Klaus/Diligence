@@ -140,6 +140,9 @@ def build_nmap_command(config: dict[str, Any], xml_path: Path) -> list[str]:
         raise ValueError(f"Ungueltiger Timing-Wert: {timing}")
 
     command = ["nmap", f"-{timing}", "-oX", str(xml_path)]
+    stats_every_seconds = int(scan_config.get("stats_every_seconds", 10))
+    if stats_every_seconds > 0:
+        command.extend(["--stats-every", f"{stats_every_seconds}s"])
 
     if profile == "discovery":
         command.extend(PROFILE_COMMANDS["discovery"])
@@ -172,17 +175,48 @@ def stop_process(process: subprocess.Popen) -> None:
         process.wait(timeout=5)
 
 
-def run_nmap(command: list[str], nmap_exe: str, timeout_seconds: int, logger: logging.Logger) -> None:
+def format_duration(seconds: int) -> str:
+    minutes, secs = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m {secs}s"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
+
+
+def run_nmap(
+    command: list[str],
+    nmap_exe: str,
+    timeout_seconds: int,
+    progress_seconds: int,
+    logger: logging.Logger,
+) -> None:
     command[0] = nmap_exe
     logger.info("Starte Nmap: %s", " ".join(command))
+    logger.info("Fortschritt: Nmap-Stats erscheinen regelmaessig; Ctrl+C bricht sauber ab.")
     started_at = time.monotonic()
+    next_progress_at = started_at + max(progress_seconds, 1)
     process = subprocess.Popen(command, cwd=APP_DIR)
 
     try:
         while process.poll() is None:
-            if timeout_seconds > 0 and time.monotonic() - started_at > timeout_seconds:
+            now = time.monotonic()
+            elapsed = int(now - started_at)
+            if timeout_seconds > 0 and elapsed > timeout_seconds:
                 stop_process(process)
                 raise RuntimeError(f"Nmap-Timeout nach {timeout_seconds} Sekunden")
+            if progress_seconds > 0 and now >= next_progress_at:
+                if timeout_seconds > 0:
+                    remaining = max(timeout_seconds - elapsed, 0)
+                    logger.info(
+                        "Scan laeuft seit %s, Timeout in %s",
+                        format_duration(elapsed),
+                        format_duration(remaining),
+                    )
+                else:
+                    logger.info("Scan laeuft seit %s", format_duration(elapsed))
+                next_progress_at = now + progress_seconds
             time.sleep(0.5)
     except KeyboardInterrupt as exc:
         stop_process(process)
@@ -332,6 +366,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--allow-public", action="store_true", help="Oeffentliche Ziele erlauben, wenn autorisiert")
     parser.add_argument("--install-deps", action="store_true", help="Fehlendes Nmap fuer Tests per Bootstrap installieren")
     parser.add_argument("--timeout", type=int, help="Nmap-Timeout in Sekunden, 0 deaktiviert")
+    parser.add_argument("--stats-every", type=int, help="Nmap/Python-Fortschrittsintervall in Sekunden, 0 deaktiviert")
     parser.add_argument("--parse-only", help="Vorhandene Nmap-XML parsen, ohne neuen Scan")
     return parser.parse_args()
 
@@ -348,6 +383,8 @@ def main() -> int:
         config["scan"]["allow_public_targets"] = True
     if args.timeout is not None:
         config["scan"]["timeout_seconds"] = args.timeout
+    if args.stats_every is not None:
+        config["scan"]["stats_every_seconds"] = args.stats_every
 
     logger = setup_logging(config)
     target = config["scan"]["target"]
@@ -361,8 +398,9 @@ def main() -> int:
     if not args.parse_only:
         nmap_exe = ensure_nmap(args.install_deps)
         timeout_seconds = int(config["scan"].get("timeout_seconds", 1800))
+        progress_seconds = int(config["scan"].get("stats_every_seconds", 10))
         command = build_nmap_command(config, xml_path)
-        run_nmap(command, nmap_exe, timeout_seconds, logger)
+        run_nmap(command, nmap_exe, timeout_seconds, progress_seconds, logger)
 
     rows = parse_nmap_xml(xml_path)
     reports = create_reports(config, rows, report_dir, stamp)
