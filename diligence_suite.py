@@ -52,24 +52,24 @@ def parse_port_list(value: str) -> list[int | str]:
 
 
 def cmd_verify_tools(args: argparse.Namespace) -> int:
-    """Verifiziere verfÃ¼gbare Tools."""
+    """Verifiziere verfuegbare Tools."""
     logger = setup_logging()
     
-    print("\n=== Nmap Suite Tools VerfÃ¼gbarkeit ===\n")
+    print("\n=== Nmap Suite Tools Verfuegbarkeit ===\n")
     status = verify_nmap_suite()
     
     for tool, available in status.items():
-        symbol = "âœ“" if available else "âœ—"
+        symbol = "OK" if available else "NO"
         print(f"[{symbol}] {tool}")
     
     available_count = sum(1 for v in status.values() if v)
-    print(f"\nVerfÃ¼gbar: {available_count}/{len(status)}")
+    print(f"\nVerfuegbar: {available_count}/{len(status)}")
     
     return 0
 
 
 def cmd_ping(args: argparse.Namespace) -> int:
-    """FÃ¼hre Nping-Scans durch."""
+    """Fuehre Nping-Scans durch."""
     logger = setup_logging(args.log_level)
     
     if not args.targets:
@@ -82,7 +82,7 @@ def cmd_ping(args: argparse.Namespace) -> int:
     
     scanner = NpingScanner(logger)
     if not scanner.is_available():
-        print("Fehler: Nping nicht verfÃ¼gbar", file=sys.stderr)
+        print("Fehler: Nping nicht verfuegbar", file=sys.stderr)
         return 1
     
     results = scanner.ping_hosts(targets, count=args.count)
@@ -121,7 +121,7 @@ def cmd_compare(args: argparse.Namespace) -> int:
     
     comparator = ScanComparator(logger)
     if not comparator.is_available():
-        print("Fehler: Ndiff nicht verfÃ¼gbar", file=sys.stderr)
+        print("Fehler: Ndiff nicht verfuegbar", file=sys.stderr)
         return 1
     
     differences = comparator.parse_scan_differences(old_path, new_path)
@@ -129,7 +129,7 @@ def cmd_compare(args: argparse.Namespace) -> int:
     print(f"\nUnterschiede:")
     print(f"  Neue Hosts: {len(differences['new_hosts'])}")
     print(f"  Entfernte Hosts: {len(differences['gone_hosts'])}")
-    print(f"  GeÃ¤nderte Hosts: {len(differences['changed_hosts'])}")
+    print(f"  Geaenderte Hosts: {len(differences['changed_hosts'])}")
     
     # Reports speichern
     if args.output:
@@ -178,14 +178,14 @@ def cmd_probe(args: argparse.Namespace) -> int:
 
 
 def cmd_listen(args: argparse.Namespace) -> int:
-    """HÃ¶re auf eingehende Verbindungen."""
+    """Hoere auf eingehende Verbindungen."""
     logger = setup_logging(args.log_level)
     
-    print(f"\nHÃ¶re auf Port {args.port} ({args.duration} Sekunden)...")
+    print(f"\nHoere auf Port {args.port} ({args.duration} Sekunden)...")
     
     ncat = NetworkCat(logger)
     if not ncat.is_available():
-        print("Fehler: Ncat nicht verfÃ¼gbar", file=sys.stderr)
+        print("Fehler: Ncat nicht verfuegbar", file=sys.stderr)
         return 1
     
     connections = ncat.listen_on_port(args.port, args.duration)
@@ -413,11 +413,11 @@ def cmd_ssl(args: argparse.Namespace) -> int:
         return 1
     
     port = args.port or 443
-    print(f"\nStarte SSL-Analyse fÃ¼r {args.host}:{port}...")
+    print(f"\nStarte SSL-Analyse fuer {args.host}:{port}...")
     
     runner = NmapScriptRunner(logger)
     if not runner.is_available():
-        print("Fehler: Nmap nicht verfÃ¼gbar", file=sys.stderr)
+        print("Fehler: Nmap nicht verfuegbar", file=sys.stderr)
         return 1
     
     try:
@@ -452,7 +452,7 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Beispiele:
-  python diligence_suite.py verify                  # Tools prÃ¼fen
+  python diligence_suite.py verify                  # Tools pruefen
   python diligence_suite.py ping --targets 192.168.1.1,192.168.1.2
   python diligence_suite.py compare --old scan1.xml --new scan2.xml
   python diligence_suite.py probe --host 192.168.1.1 --ports 22,80,443
@@ -469,20 +469,20 @@ Beispiele:
     subparsers = parser.add_subparsers(dest="command", help="Befehl")
     
     # verify
-    subparsers.add_parser("verify", help="Verifiziere verfÃ¼gbare Tools")
+    subparsers.add_parser("verify", help="Verifiziere verfuegbare Tools")
     
     # ping
     ping_parser = subparsers.add_parser("ping", help="Nping - Hosts pingen")
     ping_parser.add_argument("--targets", required=True, help="Komma-separierte Host-Liste")
     ping_parser.add_argument("--count", type=int, default=3, help="Ping-Versuche pro Host")
-    ping_parser.add_argument("--output", help="Pfad fÃ¼r Ping-Report")
+    ping_parser.add_argument("--output", help="Pfad fuer Ping-Report")
     ping_parser.add_argument("--log-level", default="INFO", help="Log-Level")
     
     # compare
     compare_parser = subparsers.add_parser("compare", help="Ndiff - Scans vergleichen")
     compare_parser.add_argument("--old", required=True, help="Alte XML-Datei")
     compare_parser.add_argument("--new", required=True, help="Neue XML-Datei")
-    compare_parser.add_argument("--output", help="Pfad fÃ¼r Vergleich-Report")
+    compare_parser.add_argument("--output", help="Pfad fuer Vergleich-Report")
     compare_parser.add_argument("--log-level", default="INFO", help="Log-Level")
     
     # probe
@@ -490,13 +490,13 @@ Beispiele:
     probe_parser.add_argument("--host", required=True, help="Ziel-Host")
     probe_parser.add_argument("--ports", required=True, help="Komma-separierte Port-Liste")
     probe_parser.add_argument("--timeout", type=int, default=5, help="Timeout pro Port")
-    probe_parser.add_argument("--output", help="Pfad fÃ¼r Port-Probe-Report")
+    probe_parser.add_argument("--output", help="Pfad fuer Port-Probe-Report")
     probe_parser.add_argument("--log-level", default="INFO", help="Log-Level")
     
     # listen
-    listen_parser = subparsers.add_parser("listen", help="Ncat - Auf Port abhÃ¶ren")
-    listen_parser.add_argument("--port", type=int, required=True, help="Port zum AbhÃ¶ren")
-    listen_parser.add_argument("--duration", type=int, default=30, help="AbhÃ¶r-Dauer in Sekunden")
+    listen_parser = subparsers.add_parser("listen", help="Ncat - Auf Port abhoeren")
+    listen_parser.add_argument("--port", type=int, required=True, help="Port zum Abhoeren")
+    listen_parser.add_argument("--duration", type=int, default=30, help="Abhoer-Dauer in Sekunden")
     listen_parser.add_argument("--log-level", default="INFO", help="Log-Level")
     
     # scripts
@@ -506,7 +506,7 @@ Beispiele:
     scripts_parser.add_argument("--ports", help="Komma-separierte Portliste, Ranges erlaubt, ueberschreibt Profil-Ports")
     scripts_parser.add_argument("--timeout", type=int, default=300, help="Timeout in Sekunden")
     scripts_parser.add_argument("--skip-host-discovery", action="store_true", help="Nmap -Pn setzen")
-    scripts_parser.add_argument("--output", help="Pfad fÃ¼r Script-Report")
+    scripts_parser.add_argument("--output", help="Pfad fuer Script-Report")
     scripts_parser.add_argument("--log-level", default="INFO", help="Log-Level")
     
     # smb
@@ -517,7 +517,7 @@ Beispiele:
     smb_parser.add_argument("--scripts", help="Komma-separierte NSE-Scripts, ueberschreibt basic/deep")
     smb_parser.add_argument("--timeout", type=int, default=180, help="Timeout in Sekunden")
     smb_parser.add_argument("--skip-host-discovery", action="store_true", help="Nmap -Pn setzen")
-    smb_parser.add_argument("--output", help="Pfad fÃ¼r SMB-Report")
+    smb_parser.add_argument("--output", help="Pfad fuer SMB-Report")
     smb_parser.add_argument("--log-level", default="INFO", help="Log-Level")
 
     # smb-sweep
@@ -536,7 +536,7 @@ Beispiele:
     ssl_parser = subparsers.add_parser("ssl", help="SSL/TLS Analyse")
     ssl_parser.add_argument("--host", required=True, help="Ziel-Host")
     ssl_parser.add_argument("--port", type=int, help="HTTPS Port (default: 443)")
-    ssl_parser.add_argument("--output", help="Pfad fÃ¼r SSL-Report")
+    ssl_parser.add_argument("--output", help="Pfad fuer SSL-Report")
     ssl_parser.add_argument("--log-level", default="INFO", help="Log-Level")
     
     args = parser.parse_args()
