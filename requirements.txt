@@ -1,0 +1,2 @@
+# Diligence nutzt nur die Python-Standardbibliothek.
+# Extern benoetigt: Nmap muss installiert und im PATH verfuegbar sein.

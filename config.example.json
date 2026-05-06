@@ -1,0 +1,16 @@
+{
+  "scan": {
+    "target": "192.168.178.0/24",
+    "profile": "common",
+    "allow_public_targets": false,
+    "timing": "T3",
+    "top_ports": 100
+  },
+  "paths": {
+    "report_dir": "reports",
+    "log_file": "Diligence.log"
+  },
+  "logging": {
+    "level": "INFO"
+  }
+}
