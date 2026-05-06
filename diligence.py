@@ -21,6 +21,10 @@ from typing import Any
 
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = APP_DIR / "config.json"
+COMMON_NMAP_PATHS = [
+    Path(r"C:\Program Files (x86)\Nmap\nmap.exe"),
+    Path(r"C:\Program Files\Nmap\nmap.exe"),
+]
 PROFILE_COMMANDS = {
     "discovery": ["-sn"],
     "common": ["-sV", "--top-ports"],
@@ -96,6 +100,36 @@ def require_authorized_target(target: str, allow_public: bool) -> None:
     )
 
 
+def find_nmap() -> str | None:
+    found = shutil.which("nmap")
+    if found:
+        return found
+
+    for candidate in COMMON_NMAP_PATHS:
+        if candidate.exists():
+            return str(candidate)
+
+    return None
+
+
+def ensure_nmap(install_deps: bool) -> str:
+    nmap_exe = find_nmap()
+    if nmap_exe:
+        return nmap_exe
+
+    if install_deps:
+        result = subprocess.run([sys.executable, "bootstrap.py", "--yes"], cwd=APP_DIR, check=False)
+        if result.returncode == 0:
+            nmap_exe = find_nmap()
+            if nmap_exe:
+                return nmap_exe
+
+    raise RuntimeError(
+        "Nmap wurde nicht gefunden. Starte fuer Tests: "
+        "python diligence.py --install-deps oder python bootstrap.py --yes"
+    )
+
+
 def build_nmap_command(config: dict[str, Any], xml_path: Path) -> list[str]:
     scan_config = config["scan"]
     profile = scan_config.get("profile", "common")
@@ -125,10 +159,8 @@ def build_nmap_command(config: dict[str, Any], xml_path: Path) -> list[str]:
     return command
 
 
-def run_nmap(command: list[str], logger: logging.Logger) -> None:
-    if shutil.which("nmap") is None:
-        raise RuntimeError("Nmap wurde nicht gefunden. Bitte Nmap installieren und PATH neu laden.")
-
+def run_nmap(command: list[str], nmap_exe: str, logger: logging.Logger) -> None:
+    command[0] = nmap_exe
     logger.info("Starte Nmap: %s", " ".join(command))
     result = subprocess.run(command, cwd=APP_DIR, text=True, capture_output=True, check=False)
     if result.stdout:
@@ -277,6 +309,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target", help="Zielnetz, z. B. 192.168.178.0/24")
     parser.add_argument("--profile", choices=sorted(PROFILE_COMMANDS), help="Scan-Profil")
     parser.add_argument("--allow-public", action="store_true", help="Oeffentliche Ziele erlauben, wenn autorisiert")
+    parser.add_argument("--install-deps", action="store_true", help="Fehlendes Nmap fuer Tests per Bootstrap installieren")
     parser.add_argument("--parse-only", help="Vorhandene Nmap-XML parsen, ohne neuen Scan")
     return parser.parse_args()
 
@@ -302,8 +335,9 @@ def main() -> int:
     xml_path = Path(args.parse_only) if args.parse_only else report_dir / f"diligence_{stamp}.xml"
 
     if not args.parse_only:
+        nmap_exe = ensure_nmap(args.install_deps)
         command = build_nmap_command(config, xml_path)
-        run_nmap(command, logger)
+        run_nmap(command, nmap_exe, logger)
 
     rows = parse_nmap_xml(xml_path)
     reports = create_reports(config, rows, report_dir, stamp)

@@ -1,2 +1,2 @@
 Set-Location -Path $PSScriptRoot
-python .\launcher.py
+python .\launcher.py --install-deps

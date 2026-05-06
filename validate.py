@@ -3,6 +3,7 @@
 
 import json
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -29,6 +30,7 @@ def get_nested(data: dict, dotkey: str):
 
 
 def main() -> int:
+    install = "--install" in sys.argv
     config_file = APP_DIR / "config.json"
     if not config_file.exists():
         print("config.json nicht gefunden.")
@@ -54,8 +56,16 @@ def main() -> int:
         return 1
 
     if shutil.which("nmap") is None:
+        if install:
+            result = subprocess.run([sys.executable, "bootstrap.py", "--yes"], cwd=APP_DIR, check=False)
+            if result.returncode == 0 or shutil.which("nmap") is not None:
+                print("Nmap-Dependency installiert.")
+                print("Diligence-Validierung erfolgreich.")
+                return 0
+
         print("Nmap wurde nicht im PATH gefunden.")
         print("Installiere Nmap von https://nmap.org/download.html und oeffne das Terminal danach neu.")
+        print("Oder automatisch fuer Tests: python validate.py --install")
         return 1
 
     print("Diligence-Validierung erfolgreich.")

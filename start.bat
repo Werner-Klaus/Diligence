@@ -1,4 +1,4 @@
 @echo off
 cd /d "%~dp0"
-python launcher.py
+python launcher.py --install-deps
 pause

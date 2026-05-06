@@ -20,6 +20,27 @@ python diligence.py
 
 Die Reports landen im Ordner `reports/`.
 
+## Dependencies fuer Tests automatisch installieren
+
+Diligence nutzt keine externen Python-Pakete. Fuer echte Scans wird aber Nmap
+benoetigt. Unter Windows kann der Test-Bootstrap Nmap per `winget` installieren:
+
+```powershell
+python bootstrap.py --yes
+python validate.py
+```
+
+Alternativ kann die Validierung den Bootstrap direkt starten:
+
+```powershell
+python validate.py --install
+python launcher.py --install-deps
+python diligence.py --install-deps
+```
+
+Nach einer Nmap-Installation muss das Terminal manchmal neu geoeffnet werden,
+damit der aktualisierte PATH sichtbar ist.
+
 ## Konfiguration
 
 ```json
