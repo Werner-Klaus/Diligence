@@ -329,6 +329,62 @@ class NmapScriptRunner:
         except Exception as exc:
             self.logger.error(f"Custom Scripts Fehler: {exc}")
             return {}
+
+    def find_hosts_with_open_ports(
+        self,
+        target: str,
+        ports: list[int | str],
+        timeout_seconds: int = 180,
+        skip_host_discovery: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Finde Hosts im Zielbereich mit offenen Ports."""
+        if not self.is_available():
+            raise RuntimeError("Nmap nicht gefunden")
+
+        port_string = ",".join(str(p) for p in ports)
+        args = [
+            self.nmap_exe,
+            "-sT",
+            "-p",
+            port_string,
+            "--open",
+            "-oX",
+            "-",
+        ]
+        if skip_host_discovery:
+            args.append("-Pn")
+        args.append(target)
+
+        self.logger.info(f"Suche offene Ports {port_string} in {target}")
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"Nmap Exit Code {result.returncode}")
+
+        root = ET.fromstring(result.stdout)
+        hosts: list[dict[str, Any]] = []
+        for host in root.findall("host"):
+            addresses = host.findall("address")
+            ip = next((a.get("addr", "") for a in addresses if a.get("addrtype") in {"ipv4", "ipv6"}), "")
+            mac = next((a.get("addr", "") for a in addresses if a.get("addrtype") == "mac"), "")
+            vendor = next((a.get("vendor", "") for a in addresses if a.get("addrtype") == "mac"), "")
+            open_ports: list[str] = []
+            for port in host.findall("ports/port"):
+                state = port.find("state")
+                if state is not None and state.get("state") == "open":
+                    open_ports.append(port.get("portid", ""))
+            if ip and open_ports:
+                hosts.append({
+                    "ip": ip,
+                    "mac": mac,
+                    "vendor": vendor,
+                    "open_ports": open_ports,
+                })
+        return hosts
     
     def _parse_script_output(self, root: ET.Element, scripts: list[str]) -> dict[str, Any]:
         """Parse Nmap Script XML Output."""

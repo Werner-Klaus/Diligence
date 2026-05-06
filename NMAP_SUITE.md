@@ -238,6 +238,9 @@ python diligence_suite.py smb --host 192.168.178.20
 # SMB auf mehreren typischen Ports
 python diligence_suite.py smb --host 192.168.178.20 --ports 139,445
 
+# SMB-Hosts im ganzen Netzwerk finden und automatisch analysieren
+python diligence_suite.py smb-sweep --target 192.168.178.0/24
+
 # Entspricht in etwa:
 # nmap --script smb-protocols,smb-os-discovery,smb-security-mode -p 139,445 192.168.178.20
 

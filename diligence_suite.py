@@ -309,6 +309,101 @@ def cmd_smb(args: argparse.Namespace) -> int:
         print(f"Fehler: {exc}", file=sys.stderr)
         return 1
 
+
+def create_smb_sweep_report(target: str, hosts: list[dict], analyses: list[dict], output_path: Path) -> None:
+    """Schreibe einen kompakten SMB-Sweep-Report."""
+    content = [
+        "# SMB Sweep",
+        "",
+        f"- Ziel: {target}",
+        f"- Hosts mit offenen SMB-Ports: {len(hosts)}",
+        "",
+        "## Treffer",
+        "",
+    ]
+    if not hosts:
+        content.append("Keine Hosts mit offenen SMB-Ports gefunden.")
+    else:
+        content.extend([
+            "| IP | MAC | Hersteller | Offene Ports |",
+            "| --- | --- | --- | --- |",
+        ])
+        for host in hosts:
+            content.append(
+                f"| {host.get('ip', '-')} | {host.get('mac', '-') or '-'} | "
+                f"{host.get('vendor', '-') or '-'} | {', '.join(host.get('open_ports', []))} |"
+            )
+
+    content.extend(["", "## SMB-Details", ""])
+    for data in analyses:
+        content.extend([
+            f"### {data.get('host', '-')}",
+            "",
+            f"- Ports: {', '.join(data.get('ports', []))}",
+            f"- OS: {data.get('os', '-')}",
+            f"- Computer Name: {data.get('computer_name', '-')}",
+            f"- Domain/Workgroup: {data.get('domain', '-')}",
+            f"- Scripts: {', '.join(data.get('scripts', []))}",
+            "",
+            "#### Protokolle",
+            "",
+        ])
+        protocols = data.get("protocols", [])
+        content.extend([f"- {item}" for item in protocols] if protocols else ["Keine Protokoll-Details gefunden."])
+        if data.get("error"):
+            content.extend(["", "#### Fehler", "", str(data["error"])])
+        content.append("")
+
+    output_path.write_text("\n".join(content).rstrip() + "\n", encoding="utf-8")
+
+
+def cmd_smb_sweep(args: argparse.Namespace) -> int:
+    """SMB-Analyse fuer alle Hosts mit offenen SMB-Ports in einem Zielnetz."""
+    logger = setup_logging(args.log_level)
+    ports = parse_port_list(args.ports)
+    runner = NmapScriptRunner(logger)
+    if not runner.is_available():
+        print("Fehler: Nmap nicht verfuegbar", file=sys.stderr)
+        return 1
+
+    print(f"\nSuche SMB-Hosts in {args.target} auf Ports {','.join(str(port) for port in ports)}...")
+    try:
+        hosts = runner.find_hosts_with_open_ports(
+            args.target,
+            ports,
+            timeout_seconds=args.discovery_timeout,
+            skip_host_discovery=args.skip_host_discovery,
+        )
+        print(f"Gefunden: {len(hosts)} Host(s) mit offenen SMB-Ports")
+
+        profile = SCRIPT_PROFILES["smb"] if args.deep else SCRIPT_PROFILES["smb-basic"]
+        scripts = [s.strip() for s in args.scripts.split(",")] if args.scripts else profile["scripts"]
+        analyses = []
+        for index, host in enumerate(hosts, 1):
+            ip = host["ip"]
+            print(f"  [{index}/{len(hosts)}] SMB-Analyse: {ip}")
+            analyses.append(runner.smb_analysis(
+                ip,
+                ports=ports,
+                scripts=scripts,
+                timeout_seconds=args.timeout,
+                skip_host_discovery=args.skip_host_discovery,
+            ))
+
+        stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = Path(args.output) if args.output else APP_DIR / "reports" / f"smb_sweep_{safe_name(args.target)}_{stamp}.md"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if output_path.suffix.lower() == ".json":
+            output_path.write_text(json.dumps({"target": args.target, "hosts": hosts, "analyses": analyses}, indent=2, ensure_ascii=False), encoding="utf-8")
+        else:
+            create_smb_sweep_report(args.target, hosts, analyses, output_path)
+        logger.info(f"SMB-Sweep-Report gespeichert: {output_path}")
+        return 0
+    except Exception as exc:
+        print(f"Fehler: {exc}", file=sys.stderr)
+        return 1
+
+
 def cmd_ssl(args: argparse.Namespace) -> int:
     """Spezialisierte SSL/TLS-Analyse."""
     logger = setup_logging(args.log_level)
@@ -365,6 +460,7 @@ Beispiele:
   python diligence_suite.py scripts --host 192.168.178.20 --profile home-services
   python diligence_suite.py scripts --host 192.168.178.20 --profile smb-basic
   python diligence_suite.py smb --host 192.168.178.20
+  python diligence_suite.py smb-sweep --target 192.168.178.0/24
   python diligence_suite.py smb --host 192.168.178.20 --deep
   python diligence_suite.py ssl --host 192.168.1.1
         """,
@@ -423,6 +519,18 @@ Beispiele:
     smb_parser.add_argument("--skip-host-discovery", action="store_true", help="Nmap -Pn setzen")
     smb_parser.add_argument("--output", help="Pfad fÃ¼r SMB-Report")
     smb_parser.add_argument("--log-level", default="INFO", help="Log-Level")
+
+    # smb-sweep
+    smb_sweep_parser = subparsers.add_parser("smb-sweep", help="SMB-Analyse fuer alle SMB-Hosts im Zielnetz")
+    smb_sweep_parser.add_argument("--target", required=True, help="Zielnetz oder Host, z. B. 192.168.178.0/24")
+    smb_sweep_parser.add_argument("--ports", default="139,445", help="Komma-separierte SMB-Portliste (default: 139,445)")
+    smb_sweep_parser.add_argument("--deep", action="store_true", help="Zusaetzlich Shares/Users abfragen")
+    smb_sweep_parser.add_argument("--scripts", help="Komma-separierte NSE-Scripts, ueberschreibt basic/deep")
+    smb_sweep_parser.add_argument("--timeout", type=int, default=180, help="Timeout pro SMB-Host in Sekunden")
+    smb_sweep_parser.add_argument("--discovery-timeout", type=int, default=300, help="Timeout fuer SMB-Hostsuche in Sekunden")
+    smb_sweep_parser.add_argument("--skip-host-discovery", action="store_true", help="Nmap -Pn setzen")
+    smb_sweep_parser.add_argument("--output", help="Pfad fuer SMB-Sweep-Report")
+    smb_sweep_parser.add_argument("--log-level", default="INFO", help="Log-Level")
     
     # ssl
     ssl_parser = subparsers.add_parser("ssl", help="SSL/TLS Analyse")
@@ -442,6 +550,7 @@ Beispiele:
         "listen": cmd_listen,
         "scripts": cmd_scripts,
         "smb": cmd_smb,
+        "smb-sweep": cmd_smb_sweep,
         "ssl": cmd_ssl,
     }
     

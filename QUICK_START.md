@@ -255,6 +255,9 @@ python diligence_suite.py smb --host 192.168.178.20
 # SMB auf NetBIOS/SMB direkt pruefen
 python diligence_suite.py smb --host 192.168.178.20 --ports 139,445
 
+# Alle SMB-Hosts im Heimnetz finden und automatisch analysieren
+python diligence_suite.py smb-sweep --target 192.168.178.0/24
+
 # Zusaetzlich Shares/Users abfragen
 python diligence_suite.py smb --host 192.168.178.20 --deep --output reports/smb_deep_192.168.178.20.md
 
