@@ -52,6 +52,7 @@ damit der aktualisierte PATH sichtbar ist.
     "allow_public_targets": false,
     "timing": "T3",
     "tcp_connect_scan": true,
+    "skip_host_discovery": false,
     "top_ports": 100,
     "timeout_seconds": 1800,
     "stats_every_seconds": 10
@@ -65,8 +66,15 @@ Profile:
 - `common`: Versionsscan gegen die haeufigsten Ports
 - `ports`: Versionsscan gegen eine explizite Portliste aus `scan.ports`
 
-`tcp_connect_scan: true` setzt fuer Portscans `-sT -Pn`. Das ist auf Windows
-oft robuster, wenn Nmap/Npcap Probleme mit raw network devices meldet.
+`tcp_connect_scan: true` setzt fuer Portscans `-sT`. Das ist auf Windows oft
+robuster, wenn Nmap/Npcap Probleme mit raw network devices meldet.
+
+`skip_host_discovery: false` ist wichtig: mit `true` setzt Diligence `-Pn`, und
+Nmap behandelt alle IPs im Zielbereich als aktiv. Das ist nur fuer Sonderfaelle
+sinnvoll.
+
+Alte `diligence_*`-Reports werden nach einem erfolgreichen Scan automatisch
+geloescht. Mit `--keep-old-reports` kannst du das fuer einen Lauf abschalten.
 
 ## CLI-Beispiele
 

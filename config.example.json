@@ -5,13 +5,15 @@
     "allow_public_targets": false,
     "timing": "T3",
     "tcp_connect_scan": true,
+    "skip_host_discovery": false,
     "top_ports": 100,
     "timeout_seconds": 1800,
     "stats_every_seconds": 10
   },
   "paths": {
     "report_dir": "reports",
-    "log_file": "Diligence.log"
+    "log_file": "Diligence.log",
+    "cleanup_old_reports": true
   },
   "logging": {
     "level": "INFO"

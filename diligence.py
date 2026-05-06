@@ -34,6 +34,13 @@ PROFILE_COMMANDS = {
     "ports": ["-sV", "-p"],
 }
 ALLOWED_TIMING = {"T0", "T1", "T2", "T3", "T4", "T5"}
+REPORT_GLOBS = (
+    "diligence_*.xml",
+    "diligence_*.csv",
+    "diligence_*.json",
+    "diligence_*.html",
+    "diligence_*.md",
+)
 PRIVATE_NETS = (
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
@@ -147,6 +154,7 @@ def build_nmap_command(config: dict[str, Any], xml_path: Path) -> list[str]:
         command.extend(["--stats-every", f"{stats_every_seconds}s"])
 
     tcp_connect_scan = bool(scan_config.get("tcp_connect_scan", True))
+    skip_host_discovery = bool(scan_config.get("skip_host_discovery", False))
 
     if profile == "discovery":
         command.extend(PROFILE_COMMANDS["discovery"])
@@ -155,13 +163,17 @@ def build_nmap_command(config: dict[str, Any], xml_path: Path) -> list[str]:
         if top_ports < 1 or top_ports > 1000:
             raise ValueError("top_ports muss zwischen 1 und 1000 liegen")
         if tcp_connect_scan:
-            command.extend(["-sT", "-Pn"])
+            command.append("-sT")
+        if skip_host_discovery:
+            command.append("-Pn")
         command.extend(PROFILE_COMMANDS["common"])
         command.append(str(top_ports))
     elif profile == "ports":
         ports = str(scan_config.get("ports", "22,80,443,445,3389"))
         if tcp_connect_scan:
-            command.extend(["-sT", "-Pn"])
+            command.append("-sT")
+        if skip_host_discovery:
+            command.append("-Pn")
         command.extend(PROFILE_COMMANDS["ports"])
         command.append(ports)
     else:
@@ -198,7 +210,7 @@ def explain_nmap_failure(output: list[str]) -> str | None:
     if "dnet: failed to open device" in text:
         return (
             "Nmap konnte ein Netzwerkdevice nicht oeffnen. "
-            "Diligence nutzt fuer Portscans standardmaessig -sT -Pn; "
+            "Diligence nutzt fuer Portscans standardmaessig -sT. "
             "falls der Fehler trotzdem bleibt, Npcap reparieren/installieren "
             "oder das discovery-Profil vermeiden."
         )
@@ -292,6 +304,7 @@ def parse_nmap_xml(xml_path: Path) -> list[dict[str, str]]:
     for host in root.findall("host"):
         status = host.find("status")
         state = status.get("state", "") if status is not None else ""
+        reason = status.get("reason", "") if status is not None else ""
         addresses = host.findall("address")
         ip_address = next((a.get("addr", "") for a in addresses if a.get("addrtype") in {"ipv4", "ipv6"}), "")
         mac_address = next((a.get("addr", "") for a in addresses if a.get("addrtype") == "mac"), "")
@@ -303,6 +316,8 @@ def parse_nmap_xml(xml_path: Path) -> list[dict[str, str]]:
 
         ports = host.findall("ports/port")
         if not ports:
+            if reason == "user-set" and not any((hostname, mac_address, vendor)):
+                continue
             rows.append(make_row(ip_address, hostname, mac_address, vendor, state))
             continue
 
@@ -505,6 +520,17 @@ def create_reports(config: dict[str, Any], rows: list[dict[str, str]], report_di
     return paths
 
 
+def cleanup_old_reports(report_dir: Path, keep_stamp: str, logger: logging.Logger) -> None:
+    removed = 0
+    for pattern in REPORT_GLOBS:
+        for path in report_dir.glob(pattern):
+            if path.is_file() and not path.name.startswith(f"diligence_{keep_stamp}"):
+                path.unlink()
+                removed += 1
+    if removed:
+        logger.info("Alte Reports geloescht: %s Dateien", removed)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Diligence Heimnetz-Inventarisierung mit Nmap")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="Pfad zur config.json")
@@ -514,6 +540,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--install-deps", action="store_true", help="Fehlendes Nmap fuer Tests per Bootstrap installieren")
     parser.add_argument("--timeout", type=int, help="Nmap-Timeout in Sekunden, 0 deaktiviert")
     parser.add_argument("--stats-every", type=int, help="Nmap/Python-Fortschrittsintervall in Sekunden, 0 deaktiviert")
+    parser.add_argument("--keep-old-reports", action="store_true", help="Alte Reports nach erfolgreichem Scan behalten")
     parser.add_argument("--parse-only", help="Vorhandene Nmap-XML parsen, ohne neuen Scan")
     return parser.parse_args()
 
@@ -551,6 +578,8 @@ def main() -> int:
 
     rows = parse_nmap_xml(xml_path)
     reports = create_reports(config, rows, report_dir, stamp)
+    if not args.parse_only and config["paths"].get("cleanup_old_reports", True) and not args.keep_old_reports:
+        cleanup_old_reports(report_dir, stamp, logger)
     logger.info("Report erstellt: %s", reports["html"])
     logger.info("Summary: %s", reports["summary"])
     logger.info("CSV: %s", reports["csv"])
