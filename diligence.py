@@ -308,6 +308,93 @@ def write_json(rows: list[dict[str, str]], path: Path) -> None:
         json.dump(rows, handle, indent=2, ensure_ascii=False)
 
 
+def group_rows_by_host(rows: list[dict[str, str]]) -> dict[str, list[dict[str, str]]]:
+    hosts: dict[str, list[dict[str, str]]] = {}
+    for row in rows:
+        key = row["ip"] or row["hostname"] or "unbekannt"
+        hosts.setdefault(key, []).append(row)
+    return dict(sorted(hosts.items(), key=lambda item: item[0]))
+
+
+def markdown_table(headers: list[str], rows: list[list[str]]) -> str:
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join("---" for _ in headers) + " |",
+    ]
+    for row in rows:
+        clean = [value.replace("|", "\\|").replace("\n", " ").strip() for value in row]
+        lines.append("| " + " | ".join(clean) + " |")
+    return "\n".join(lines)
+
+
+def write_markdown(rows: list[dict[str, str]], path: Path, target: str, created_at: str) -> None:
+    hosts = group_rows_by_host(rows)
+    overview_rows: list[list[str]] = []
+    sections: list[str] = []
+
+    for _, host_rows in hosts.items():
+        first = host_rows[0]
+        open_ports = [
+            f"{row['port']}/{row['protocol']} {row['service']}".strip()
+            for row in host_rows
+            if row["port"] and row["port_state"] == "open"
+        ]
+        overview_rows.append([
+            first["ip"],
+            first["hostname"],
+            first["mac"],
+            first["vendor"],
+            first["host_state"],
+            ", ".join(open_ports) if open_ports else "-",
+        ])
+
+        title = first["ip"] or first["hostname"] or "Unbekannter Host"
+        sections.append(f"## {title}")
+        sections.append("")
+        sections.append(f"- Hostname: {first['hostname'] or '-'}")
+        sections.append(f"- MAC: {first['mac'] or '-'}")
+        sections.append(f"- Hersteller: {first['vendor'] or '-'}")
+        sections.append(f"- Status: {first['host_state'] or '-'}")
+        port_rows = [
+            [
+                row["protocol"],
+                row["port"],
+                row["port_state"],
+                row["service"],
+                row["product"],
+                row["version"],
+            ]
+            for row in host_rows
+            if row["port"]
+        ]
+        if port_rows:
+            sections.append("")
+            sections.append(markdown_table(
+                ["Proto", "Port", "Status", "Dienst", "Produkt", "Version"],
+                port_rows,
+            ))
+        sections.append("")
+
+    document = [
+        "# Diligence Scan Summary",
+        "",
+        f"- Ziel: {target}",
+        f"- Erstellt: {created_at}",
+        f"- Hosts: {len(hosts)}",
+        f"- Tabelleneintraege: {len(rows)}",
+        "",
+        "## Uebersicht",
+        "",
+        markdown_table(
+            ["IP", "Hostname", "MAC", "Hersteller", "Status", "Offene Ports"],
+            overview_rows,
+        ) if overview_rows else "Keine Hosts gefunden.",
+        "",
+        *sections,
+    ]
+    path.write_text("\n".join(document).rstrip() + "\n", encoding="utf-8")
+
+
 def write_html(rows: list[dict[str, str]], path: Path, target: str, created_at: str) -> None:
     headers = ["IP", "Hostname", "MAC", "Hersteller", "Host", "Proto", "Port", "Port-Status", "Dienst", "Produkt", "Version"]
     keys = list(make_row("", "", "", "", "").keys())
@@ -351,10 +438,12 @@ def create_reports(config: dict[str, Any], rows: list[dict[str, str]], report_di
         "csv": report_dir / f"diligence_{stamp}.csv",
         "json": report_dir / f"diligence_{stamp}.json",
         "html": report_dir / f"diligence_{stamp}.html",
+        "summary": report_dir / f"diligence_{stamp}_summary.md",
     }
     write_csv(rows, paths["csv"])
     write_json(rows, paths["json"])
     write_html(rows, paths["html"], target, created_at)
+    write_markdown(rows, paths["summary"], target, created_at)
     return paths
 
 
@@ -405,11 +494,13 @@ def main() -> int:
     rows = parse_nmap_xml(xml_path)
     reports = create_reports(config, rows, report_dir, stamp)
     logger.info("Report erstellt: %s", reports["html"])
+    logger.info("Summary: %s", reports["summary"])
     logger.info("CSV: %s", reports["csv"])
     logger.info("JSON: %s", reports["json"])
     print()
     print(f"Gefundene Tabelleneintraege: {len(rows)}")
     print(f"HTML-Report: {reports['html']}")
+    print(f"Summary: {reports['summary']}")
     return 0
 
 

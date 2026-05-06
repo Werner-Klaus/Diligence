@@ -1,7 +1,7 @@
 # Diligence
 
 Diligence inventarisiert ein autorisiertes Heimnetz mit Nmap und erzeugt daraus
-saubere Reports als HTML, CSV und JSON.
+saubere Reports als HTML, Markdown, CSV und JSON.
 
 ## Voraussetzungen
 
@@ -18,7 +18,8 @@ python validate.py
 python diligence.py
 ```
 
-Die Reports landen im Ordner `reports/`.
+Die Reports landen im Ordner `reports/`. Die kompakte Markdown-Datei
+`*_summary.md` ist fuer die schnelle Sichtung im Editor oder auf GitHub gedacht.
 
 ## Dependencies fuer Tests automatisch installieren
 
