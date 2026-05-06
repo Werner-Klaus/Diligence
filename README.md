@@ -48,11 +48,12 @@ damit der aktualisierte PATH sichtbar ist.
 {
   "scan": {
     "target": "192.168.178.0/24",
-    "profile": "common",
+    "profile": "ports",
     "allow_public_targets": false,
     "timing": "T3",
     "tcp_connect_scan": true,
     "skip_host_discovery": false,
+    "ports": "22,53,80,139,443,445,515,631,9100,5000,5357,49152-49156",
     "top_ports": 100,
     "timeout_seconds": 1800,
     "stats_every_seconds": 10
@@ -80,7 +81,8 @@ geloescht. Mit `--keep-old-reports` kannst du das fuer einen Lauf abschalten.
 
 ```powershell
 python diligence.py --target 192.168.178.0/24 --profile discovery
-python diligence.py --target 192.168.178.0/24 --profile common
+python diligence.py --target 192.168.178.0/24 --profile ports
+python diligence.py --target 192.168.178.0/24 --ports 22,53,80,139,443,445,515,631,9100,5000,5357,49152-49156
 python diligence.py --target 192.168.178.0/24 --profile common --timeout 900
 python diligence.py --target 192.168.178.0/24 --profile common --stats-every 5
 python diligence.py --parse-only .\reports\diligence_20260506_120000.xml

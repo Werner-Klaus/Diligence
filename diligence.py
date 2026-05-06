@@ -24,6 +24,7 @@ from typing import Any
 
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = APP_DIR / "config.json"
+DEFAULT_HOME_PORTS = "22,53,80,139,443,445,515,631,9100,5000,5357,49152-49156"
 COMMON_NMAP_PATHS = [
     Path(r"C:\Program Files (x86)\Nmap\nmap.exe"),
     Path(r"C:\Program Files\Nmap\nmap.exe"),
@@ -169,7 +170,7 @@ def build_nmap_command(config: dict[str, Any], xml_path: Path) -> list[str]:
         command.extend(PROFILE_COMMANDS["common"])
         command.append(str(top_ports))
     elif profile == "ports":
-        ports = str(scan_config.get("ports", "22,80,443,445,3389"))
+        ports = str(scan_config.get("ports", DEFAULT_HOME_PORTS))
         if tcp_connect_scan:
             command.append("-sT")
         if skip_host_discovery:
@@ -536,6 +537,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="Pfad zur config.json")
     parser.add_argument("--target", help="Zielnetz, z. B. 192.168.178.0/24")
     parser.add_argument("--profile", choices=sorted(PROFILE_COMMANDS), help="Scan-Profil")
+    parser.add_argument("--ports", help="Portliste fuer das ports-Profil, z. B. 22,80,443,49152-49156")
     parser.add_argument("--allow-public", action="store_true", help="Oeffentliche Ziele erlauben, wenn autorisiert")
     parser.add_argument("--install-deps", action="store_true", help="Fehlendes Nmap fuer Tests per Bootstrap installieren")
     parser.add_argument("--timeout", type=int, help="Nmap-Timeout in Sekunden, 0 deaktiviert")
@@ -553,6 +555,9 @@ def main() -> int:
         config["scan"]["target"] = args.target
     if args.profile:
         config["scan"]["profile"] = args.profile
+    if args.ports:
+        config["scan"]["profile"] = "ports"
+        config["scan"]["ports"] = args.ports
     if args.allow_public:
         config["scan"]["allow_public_targets"] = True
     if args.timeout is not None:
