@@ -4,6 +4,7 @@
     "profile": "common",
     "allow_public_targets": false,
     "timing": "T3",
+    "tcp_connect_scan": true,
     "top_ports": 100,
     "timeout_seconds": 1800,
     "stats_every_seconds": 10

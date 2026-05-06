@@ -12,9 +12,11 @@ import html
 import ipaddress
 import json
 import logging
+import queue
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -144,16 +146,22 @@ def build_nmap_command(config: dict[str, Any], xml_path: Path) -> list[str]:
     if stats_every_seconds > 0:
         command.extend(["--stats-every", f"{stats_every_seconds}s"])
 
+    tcp_connect_scan = bool(scan_config.get("tcp_connect_scan", True))
+
     if profile == "discovery":
         command.extend(PROFILE_COMMANDS["discovery"])
     elif profile == "common":
         top_ports = int(scan_config.get("top_ports", 100))
         if top_ports < 1 or top_ports > 1000:
             raise ValueError("top_ports muss zwischen 1 und 1000 liegen")
+        if tcp_connect_scan:
+            command.extend(["-sT", "-Pn"])
         command.extend(PROFILE_COMMANDS["common"])
         command.append(str(top_ports))
     elif profile == "ports":
         ports = str(scan_config.get("ports", "22,80,443,445,3389"))
+        if tcp_connect_scan:
+            command.extend(["-sT", "-Pn"])
         command.extend(PROFILE_COMMANDS["ports"])
         command.append(ports)
     else:
@@ -185,6 +193,27 @@ def format_duration(seconds: int) -> str:
     return f"{secs}s"
 
 
+def explain_nmap_failure(output: list[str]) -> str | None:
+    text = "\n".join(output).lower()
+    if "dnet: failed to open device" in text:
+        return (
+            "Nmap konnte ein Netzwerkdevice nicht oeffnen. "
+            "Diligence nutzt fuer Portscans standardmaessig -sT -Pn; "
+            "falls der Fehler trotzdem bleibt, Npcap reparieren/installieren "
+            "oder das discovery-Profil vermeiden."
+        )
+    if "requires root privileges" in text or "you requested a scan type which requires root" in text:
+        return "Der gewaehlte Nmap-Scan braucht Adminrechte. Nutze tcp_connect_scan=true oder starte als Administrator."
+    return None
+
+
+def stream_process_output(process: subprocess.Popen, output_queue: queue.Queue[str]) -> None:
+    if process.stdout is None:
+        return
+    for line in process.stdout:
+        output_queue.put(line.rstrip())
+
+
 def run_nmap(
     command: list[str],
     nmap_exe: str,
@@ -197,10 +226,29 @@ def run_nmap(
     logger.info("Fortschritt: Nmap-Stats erscheinen regelmaessig; Ctrl+C bricht sauber ab.")
     started_at = time.monotonic()
     next_progress_at = started_at + max(progress_seconds, 1)
-    process = subprocess.Popen(command, cwd=APP_DIR)
+    process = subprocess.Popen(
+        command,
+        cwd=APP_DIR,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    output_queue: queue.Queue[str] = queue.Queue()
+    output_thread = threading.Thread(target=stream_process_output, args=(process, output_queue), daemon=True)
+    output_thread.start()
+    output_lines: list[str] = []
 
     try:
         while process.poll() is None:
+            while True:
+                try:
+                    line = output_queue.get_nowait()
+                except queue.Empty:
+                    break
+                output_lines.append(line)
+                logger.info("nmap: %s", line)
+
             now = time.monotonic()
             elapsed = int(now - started_at)
             if timeout_seconds > 0 and elapsed > timeout_seconds:
@@ -222,8 +270,18 @@ def run_nmap(
         stop_process(process)
         raise RuntimeError("Nmap-Scan durch Benutzer abgebrochen") from exc
 
+    while True:
+        try:
+            line = output_queue.get_nowait()
+        except queue.Empty:
+            break
+        output_lines.append(line)
+        logger.info("nmap: %s", line)
+
     if process.returncode != 0:
-        raise RuntimeError(f"Nmap fehlgeschlagen (Exit Code {process.returncode})")
+        explanation = explain_nmap_failure(output_lines)
+        detail = f": {explanation}" if explanation else ""
+        raise RuntimeError(f"Nmap fehlgeschlagen (Exit Code {process.returncode}){detail}")
 
 
 def parse_nmap_xml(xml_path: Path) -> list[dict[str, str]]:

@@ -51,6 +51,7 @@ damit der aktualisierte PATH sichtbar ist.
     "profile": "common",
     "allow_public_targets": false,
     "timing": "T3",
+    "tcp_connect_scan": true,
     "top_ports": 100,
     "timeout_seconds": 1800,
     "stats_every_seconds": 10
@@ -63,6 +64,9 @@ Profile:
 - `discovery`: Host-Erkennung ohne Portscan (`nmap -sn`)
 - `common`: Versionsscan gegen die haeufigsten Ports
 - `ports`: Versionsscan gegen eine explizite Portliste aus `scan.ports`
+
+`tcp_connect_scan: true` setzt fuer Portscans `-sT -Pn`. Das ist auf Windows
+oft robuster, wenn Nmap/Npcap Probleme mit raw network devices meldet.
 
 ## CLI-Beispiele
 
