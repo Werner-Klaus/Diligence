@@ -452,7 +452,7 @@ def cmd_ssl(args: argparse.Namespace) -> int:
         return 1
     
     try:
-        ssl_data = runner.ssl_analysis(args.host, port)
+        ssl_data = runner.ssl_analysis(args.host, port, timeout_seconds=args.timeout)
         
         print(f"\nSSL-Analyse Ergebnisse:")
         if "error" in ssl_data:
@@ -467,7 +467,17 @@ def cmd_ssl(args: argparse.Namespace) -> int:
         
         stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = selected_report_path(args.output, "ssl", f"ssl_{safe_name(args.host)}_{port}_{stamp}.txt")
-        output_path.write_text(ssl_data.get('output', ''), encoding="utf-8")
+        report_text = ssl_data.get("output", "")
+        if ssl_data.get("error"):
+            report_text = (
+                "SSL-Analyse fehlgeschlagen.\n\n"
+                f"Fehler: {ssl_data['error']}\n\n"
+                "Nmap stdout:\n"
+                f"{ssl_data.get('output', '')}\n\n"
+                "Nmap stderr:\n"
+                f"{ssl_data.get('stderr', '')}\n"
+            )
+        output_path.write_text(report_text, encoding="utf-8")
         logger.info(f"SSL-Report gespeichert: {output_path}")
         
         return 0
@@ -568,6 +578,7 @@ Beispiele:
     ssl_parser = subparsers.add_parser("ssl", help="SSL/TLS Analyse")
     ssl_parser.add_argument("--host", required=True, help="Ziel-Host")
     ssl_parser.add_argument("--port", type=int, help="HTTPS Port (default: 443)")
+    ssl_parser.add_argument("--timeout", type=int, default=120, help="Timeout in Sekunden")
     ssl_parser.add_argument("--output", help="Pfad fuer SSL-Report")
     ssl_parser.add_argument("--log-level", default="INFO", help="Log-Level")
     

@@ -455,18 +455,19 @@ class NmapScriptRunner:
         )
         return summarize_smb_results(host, selected_ports, selected_scripts, results)
 
-    def ssl_analysis(self, host: str, port: int = 443) -> dict[str, Any]:
+    def ssl_analysis(self, host: str, port: int = 443, timeout_seconds: int = 120) -> dict[str, Any]:
         """
         Spezialisierte SSL/TLS-Analyse.
         
         Returns:
             dict mit SSL-Informationen
         """
-        self.logger.info(f"Starte SSL-Analyse fÃ¼r {host}:{port}")
+        self.logger.info(f"Starte SSL-Analyse fuer {host}:{port}")
         
         try:
             args = [
                 self.nmap_exe,
+                "-sT",
                 "-p",
                 str(port),
                 "--script=ssl-cert,ssl-enum-ciphers,ssl-dh-params",
@@ -479,8 +480,17 @@ class NmapScriptRunner:
                 args,
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=timeout_seconds,
             )
+
+            if result.returncode != 0:
+                error = result.stderr.strip() or result.stdout.strip() or f"Nmap Exit Code {result.returncode}"
+                return {
+                    "error": error,
+                    "output": result.stdout,
+                    "stderr": result.stderr,
+                    "port": port,
+                }
             
             return {
                 "output": result.stdout,
