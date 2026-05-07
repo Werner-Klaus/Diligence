@@ -349,9 +349,32 @@ def create_smb_sweep_report(target: str, hosts: list[dict], analyses: list[dict]
         f"- Ziel: {target}",
         f"- Hosts mit offenen SMB-Ports: {len(hosts)}",
         "",
-        "## Treffer",
+        "## Bewertung",
         "",
     ]
+    if not hosts:
+        content.append("- Keine Hosts mit offenen SMB-Ports gefunden. Aus SMB-Sicht unauffaellig.")
+    else:
+        content.append(f"- {len(hosts)} Host(s) mit offenen SMB-Ports gefunden. Im Heimnetz kann das normal sein, sollte aber bekannten Geraeten zugeordnet werden.")
+        anonymous_details = [
+            data.get("host", "-")
+            for data in analyses
+            if data.get("shares") or data.get("users") or data.get("protocols")
+        ]
+        quiet_hosts = [
+            data.get("host", "-")
+            for data in analyses
+            if not data.get("shares") and not data.get("users") and not data.get("protocols")
+        ]
+        if anonymous_details:
+            content.append("- Pruefen: Einige Hosts liefern SMB-Details: " + ", ".join(anonymous_details))
+        if quiet_hosts:
+            content.append("- Hinweis: Einige Hosts geben keine anonymen SMB-Details preis: " + ", ".join(quiet_hosts))
+    content.extend([
+        "",
+        "## Treffer",
+        "",
+    ])
     if not hosts:
         content.append("Keine Hosts mit offenen SMB-Ports gefunden.")
     else:
@@ -471,12 +494,25 @@ def cmd_ssl(args: argparse.Namespace) -> int:
         if ssl_data.get("error"):
             report_text = (
                 "SSL-Analyse fehlgeschlagen.\n\n"
+                "Bewertung: Keine TLS-Aussage moeglich. Pruefe Host, Port, VPN/Firewall und ob dort wirklich HTTPS laeuft.\n\n"
                 f"Fehler: {ssl_data['error']}\n\n"
                 "Nmap stdout:\n"
                 f"{ssl_data.get('output', '')}\n\n"
                 "Nmap stderr:\n"
                 f"{ssl_data.get('stderr', '')}\n"
             )
+        elif report_text:
+            if "state=\"filtered\"" in report_text or "state=\"closed\"" in report_text:
+                report_text = (
+                    "Bewertung: Kein erreichbarer TLS-Dienst auf diesem Port. "
+                    "Das ist kein TLS-Befund, sondern ein Port-/Firewall-Befund.\n\n"
+                    + report_text
+                )
+            else:
+                report_text = (
+                    "Bewertung: TLS-Dienst antwortet. Pruefe Zertifikat, Ablaufdatum, TLS-Versionen und schwache Cipher.\n\n"
+                    + report_text
+                )
         output_path.write_text(report_text, encoding="utf-8")
         logger.info(f"SSL-Report gespeichert: {output_path}")
         

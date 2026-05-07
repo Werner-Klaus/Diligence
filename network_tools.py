@@ -283,9 +283,19 @@ def create_port_probe_report(
         f"- Getestete Ports: {len(probe_results)}",
         f"- Offen: {len(connected)}",
         "",
-        "## Port-Details",
+        "## Bewertung",
         "",
     ]
+    if connected:
+        content.append("- Offene TCP-Ports gefunden. Pruefe, ob diese Dienste auf diesem Host erwartet sind.")
+    else:
+        content.append("- Keine offenen TCP-Ports per Connect-Probe gefunden.")
+        content.append("- CLOSED_OR_FILTERED bedeutet: kein TCP-Connect moeglich; das kann geschlossen, gefiltert, VPN oder Firewall sein.")
+    content.extend([
+        "",
+        "## Port-Details",
+        "",
+    ])
 
     for port in sorted(probe_results.keys()):
         result = probe_results[port]

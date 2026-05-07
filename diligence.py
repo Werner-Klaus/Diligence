@@ -401,6 +401,37 @@ def markdown_table(headers: list[str], rows: list[list[str]]) -> str:
     return "\n".join(lines)
 
 
+def assess_scan_rows(rows: list[dict[str, str]]) -> list[str]:
+    """Erzeuge eine kurze Bewertung fuer den Scan-Report."""
+    open_rows = [row for row in rows if row.get("port_state") == "open"]
+    filtered_rows = [row for row in rows if row.get("port_state") == "filtered"]
+    hosts = group_rows_by_host(rows)
+    sensitive_ports = {"21", "22", "23", "80", "139", "445", "3389", "5900"}
+    sensitive_open = [
+        f"{row['ip']}:{row['port']}/{row['protocol']} {row['service']}".strip()
+        for row in open_rows
+        if row.get("port") in sensitive_ports
+    ]
+
+    lines = [
+        "## Bewertung",
+        "",
+    ]
+    if not rows:
+        lines.append("- Keine Hosts/Ports im Report. Pruefe Zielnetz, VPN, Firewall und Scanprofil.")
+    elif not open_rows:
+        lines.append("- Keine offenen TCP-Ports gefunden. Das ist moeglich, kann aber auch durch Firewall, VPN oder Gastnetz entstehen.")
+        if filtered_rows:
+            lines.append(f"- {len(filtered_rows)} Port-Eintraege sind gefiltert. Gefiltert bedeutet: keine klare Aussage offen/geschlossen.")
+    else:
+        lines.append(f"- {len(open_rows)} offene Port-Eintraege auf {len(hosts)} Host(s) gefunden.")
+        if sensitive_open:
+            lines.append("- Pruefen: sensible Dienste offen: " + ", ".join(sensitive_open[:10]))
+        else:
+            lines.append("- Keine typischen Hochrisiko-Ports in der Standardliste offen gefunden.")
+    return lines
+
+
 def write_markdown(rows: list[dict[str, str]], path: Path, target: str, created_at: str) -> None:
     hosts = group_rows_by_host(rows)
     overview_rows: list[list[str]] = []
@@ -456,6 +487,8 @@ def write_markdown(rows: list[dict[str, str]], path: Path, target: str, created_
         f"- Erstellt: {created_at}",
         f"- Hosts: {len(hosts)}",
         f"- Tabelleneintraege: {len(rows)}",
+        "",
+        *assess_scan_rows(rows),
         "",
         "## Uebersicht",
         "",

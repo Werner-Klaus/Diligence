@@ -1,7 +1,7 @@
 ﻿#!/usr/bin/env python3
 """
 Nmap Scripts (NSE) Integration - Tiefere Service-Analyse.
-FÃ¼hrt spezialisierte Nmap-Scripts fÃ¼r verschiedene Services aus.
+Fuehrt spezialisierte Nmap-Scripts fuer verschiedene Services aus.
 """
 
 import json
@@ -14,7 +14,7 @@ from typing import Any, Optional
 from nmap_suite import find_nmap_tool
 
 
-# Vordefinierte Script-Profile fÃ¼r hÃ¤ufige Anwendungen
+# Vordefinierte Script-Profile fuer haeufige Anwendungen
 SCRIPT_PROFILES = {
     "home-services": {
         "description": "Sichere NSE-Analyse typischer Heimnetz-Dienste",
@@ -144,7 +144,7 @@ SCRIPT_PROFILES = {
         ],
     },
     "vulnerabilities": {
-        "description": "Allgemeine SicherheitslÃ¼cken-PrÃ¼fung",
+        "description": "Allgemeine Sicherheitsluecken-Pruefung",
         "ports": [],
         "scripts": [
             "vulners",
@@ -157,19 +157,19 @@ SCRIPT_PROFILES = {
 
 
 class NmapScriptRunner:
-    """FÃ¼hrt Nmap-Scripts (NSE) aus."""
+    """Fuehrt Nmap-Scripts (NSE) aus."""
     
     def __init__(self, logger: logging.Logger):
         self.logger = logger
         self.nmap_exe = find_nmap_tool("nmap")
     
     def is_available(self) -> bool:
-        """PrÃ¼fe ob Nmap verfÃ¼gbar ist."""
+        """Pruefe ob Nmap verfuegbar ist."""
         return self.nmap_exe is not None
     
     def get_available_scripts(self) -> list[str]:
         """
-        Liste verfÃ¼gbare Nmap-Scripts auf.
+        Liste verfuegbare Nmap-Scripts auf.
         
         Returns:
             Liste der installierten Scripts
@@ -184,7 +184,7 @@ class NmapScriptRunner:
                 text=True,
                 timeout=10,
             )
-            # Einfache Heuristik: ZÃ¤hle Script-Zeilen
+            # Einfache Heuristik: Zaehle Script-Zeilen
             scripts = [line.strip() for line in result.stdout.split("\n") if line.strip().startswith("smb-")]
             return scripts[:10]  # Top 10
         except Exception:
@@ -197,7 +197,7 @@ class NmapScriptRunner:
         output_format: str = "xml",
     ) -> Optional[str]:
         """
-        FÃ¼hre ein vordefiniertes Script-Profil aus.
+        Fuehre ein vordefiniertes Script-Profil aus.
         
         Args:
             host: Ziel-Host/IP
@@ -267,7 +267,7 @@ class NmapScriptRunner:
         skip_host_discovery: bool = False,
     ) -> dict[str, Any]:
         """
-        FÃ¼hre Custom Scripts auf spezifischen Ports aus.
+        Fuehre Custom Scripts auf spezifischen Ports aus.
         
         Args:
             host: Ziel-Host
@@ -286,7 +286,7 @@ class NmapScriptRunner:
         port_string = ",".join(str(p) for p in ports) if ports else "1-65535"
         
         try:
-            self.logger.info(f"FÃ¼hre {len(scripts)} Scripts auf {host}:{port_string} aus")
+            self.logger.info(f"Fuehre {len(scripts)} Scripts auf {host}:{port_string} aus")
             
             args = [
                 self.nmap_exe,
@@ -502,7 +502,7 @@ class NmapScriptRunner:
     
     def service_fingerprint(self, host: str, port: int) -> dict[str, Any]:
         """
-        Service-Fingerprinting fÃ¼r einen Port.
+        Service-Fingerprinting fuer einen Port.
         
         Returns:
             dict mit Service-Details
@@ -544,6 +544,12 @@ def create_script_analysis_report(
     profile_config = SCRIPT_PROFILES.get(profile, {})
     description = profile_config.get("description", profile)
     
+    scripts = script_results.get("scripts", script_results) if isinstance(script_results, dict) else {}
+    result_count = sum(
+        len(results) if isinstance(results, dict) else 1
+        for results in scripts.values()
+    ) if isinstance(scripts, dict) else 0
+
     content = [
         f"# Nmap Script Analyse - {profile.upper()}",
         "",
@@ -551,11 +557,22 @@ def create_script_analysis_report(
         f"- Profil: {description}",
         f"- Zeitstempel: {Path(output_path).stem}",
         "",
-        "## Ergebnisse",
+        "## Bewertung",
         "",
     ]
-    
-    scripts = script_results.get("scripts", script_results) if isinstance(script_results, dict) else {}
+    if not scripts:
+        content.append("- Keine Script-Ergebnisse gefunden. Das kann unauffaellig sein oder bedeuten, dass die passenden Dienste nicht erreichbar waren.")
+    else:
+        content.append(f"- {len(scripts)} Script(s) mit Ergebnissen gefunden, insgesamt {result_count} Port-Ergebnis(se).")
+        if any(name.startswith("http-") for name in scripts):
+            content.append("- HTTP-Antworten gefunden. Pruefe Port, Titel und Server-Header zur Geraeteidentifikation.")
+        if any(name.startswith("smb-") for name in scripts):
+            content.append("- SMB-Antworten gefunden. Pruefe, ob anonyme Shares, Benutzer oder alte Protokolle sichtbar sind.")
+    content.extend([
+        "",
+        "## Ergebnisse",
+        "",
+    ])
 
     if not scripts:
         content.append("Keine Ergebnisse gefunden.")
@@ -570,7 +587,7 @@ def create_script_analysis_report(
                     content.append(f"```")
                     content.append(output[:500])  # Max 500 chars
                     if len(output) > 500:
-                        content.append("... (gekÃ¼rzt)")
+                        content.append("... (gekuerzt)")
                     content.append("```")
                     content.append("")
             else:
@@ -636,6 +653,10 @@ def summarize_smb_results(
 
 def create_smb_report(smb_data: dict[str, Any], output_path: Path) -> None:
     """Schreibe einen kompakten SMB-Markdown-Report."""
+    shares = smb_data.get("shares", [])
+    users = smb_data.get("users", [])
+    protocols = smb_data.get("protocols", [])
+
     content = [
         "# SMB Analyse",
         "",
@@ -646,22 +667,36 @@ def create_smb_report(smb_data: dict[str, Any], output_path: Path) -> None:
         f"- Domain/Workgroup: {smb_data.get('domain', '-')}",
         f"- Scripts: {', '.join(smb_data.get('scripts', []))}",
         "",
-        "## Protokolle",
+        "## Bewertung",
         "",
     ]
+    if smb_data.get("error"):
+        content.append("- Analyse fehlgeschlagen oder unvollstaendig. Fehlerdetails unten pruefen.")
+    elif not protocols and not shares and not users:
+        content.append("- SMB ist erreichbar, gibt aber keine anonymen Details preis. Das ist typischerweise ein gutes Zeichen.")
+    else:
+        content.append("- SMB liefert Details. Pruefe, ob diese Informationen anonym sichtbar sein sollten.")
+        if shares:
+            content.append(f"- Pruefen: {len(shares)} Share-Hinweis(e) gefunden.")
+        if users:
+            content.append(f"- Pruefen: {len(users)} Benutzer-Hinweis(e) gefunden.")
+        if any("smbv1" in item.lower() or "smb 1" in item.lower() for item in protocols):
+            content.append("- Kritisch pruefen: Hinweis auf SMBv1 gefunden. SMBv1 sollte deaktiviert sein.")
+    content.extend([
+        "",
+        "## Protokolle",
+        "",
+    ])
 
     if smb_data.get("error"):
         content.extend(["## Fehler", "", str(smb_data["error"]), ""])
 
-    protocols = smb_data.get("protocols", [])
     content.extend([f"- {item}" for item in protocols] if protocols else ["Keine Protokoll-Details gefunden."])
     content.extend(["", "## Shares", ""])
 
-    shares = smb_data.get("shares", [])
     content.extend([f"- {item}" for item in shares] if shares else ["Keine Share-Details gefunden."])
     content.extend(["", "## Benutzer", ""])
 
-    users = smb_data.get("users", [])
     content.extend([f"- {item}" for item in users] if users else ["Keine Benutzer-Details gefunden."])
 
     output_path.write_text("\n".join(content).rstrip() + "\n", encoding="utf-8")

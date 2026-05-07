@@ -176,9 +176,22 @@ def create_ping_report(
         f"- Erreichbar: {len(reachable)}",
         f"- Nicht erreichbar: {len(unreachable)}",
         "",
-        "## Erreichbare Hosts",
+        "## Bewertung",
         "",
     ]
+    if not ping_results:
+        content.append("- Keine Hosts getestet.")
+    elif reachable and not unreachable:
+        content.append("- Alle getesteten Hosts sind erreichbar. Das ist fuer bekannte Heimnetzgeraete normal.")
+    elif reachable:
+        content.append("- Einige Hosts sind erreichbar, andere nicht. Nicht erreichbar bedeutet nicht automatisch offline; Firewalls koennen Ping blockieren.")
+    else:
+        content.append("- Keine Hosts per Nping erreichbar. Pruefe Zielnetz, VPN, Firewall und Netzwerkprofil.")
+    content.extend([
+        "",
+        "## Erreichbare Hosts",
+        "",
+    ])
     
     if reachable:
         for host in sorted(reachable):
